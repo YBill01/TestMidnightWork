@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9889ea60dddbcbe4bae39a2319908e83, type: 3}
+  m_Name: GameConfig
+  m_EditorClassIdentifier: 
+  octreeBounds:
+    m_Center: {x: 0, y: 0, z: 0}
+    m_Extent: {x: 48, y: 48, z: 48}
+  areaBounds:
+    m_Center: {x: 0, y: 0, z: 0}
+    m_Extent: {x: 32, y: 32, z: 32}
+  asylumAreaBounds:
+    m_Center: {x: 0, y: -36, z: 0}
+    m_Extent: {x: 32, y: 4, z: 32}
+  startNumAgents: 1
+  startNumInterests: 1
+  startNumPredators: 1
+  speedAgents: 2
+  speedPredators: 3
+  spawnCountAgents: 1
+  spawnRateInterests: 7
+  maxNumInterests: 128
+  nightMode: 0
