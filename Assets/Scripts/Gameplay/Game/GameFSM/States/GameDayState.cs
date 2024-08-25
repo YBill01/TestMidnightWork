@@ -1,5 +1,5 @@
 using NativeTrees;
-//using System.Diagnostics;
+using System.Diagnostics;
 using Unity.Collections;
 using Unity.Jobs;
 using UnityEngine;
@@ -46,7 +46,7 @@ public class GameDayState : State
 
 	protected override void OnUpdate()
 	{
-		SpawnInterests();
+		//SpawnInterests();
 	}
 
 	private void SpawnInterests()
@@ -77,11 +77,11 @@ public class GameDayState : State
 		}
 	}
 
-	public void UpdateOctree(NativeArray<Unit> units, NativeArray<Target> targets, NativeOctree<Unit> octree, NativeArray<bool> octreeIsRebuild)
+	public void UpdateOctree(NativeArray<Unit> units, NativeArray<Target> targets, NativeOctree<Unit> octree, NativeReference<bool> octreeIsRebuild)
 	{
-		if (octreeIsRebuild[0])
+		if (octreeIsRebuild.Value)
 		{
-			//var sw = Stopwatch.StartNew();
+			Stopwatch sw = Stopwatch.StartNew();
 
 			octree.Clear();
 
@@ -100,10 +100,10 @@ public class GameDayState : State
 			};
 			octreeNearestTargetJob.Schedule(octreeInsertUnitsHandle).Complete();
 
-			//sw.Stop();
-			//UnityEngine.Debug.Log($"octree: {sw.Elapsed.TotalMilliseconds}");
+			sw.Stop();
+			UnityEngine.Debug.Log($"octree: {sw.Elapsed.TotalMilliseconds}ms");
 
-			octreeIsRebuild[0] = false;
+			octreeIsRebuild.Value = false;
 		}
 	}
 

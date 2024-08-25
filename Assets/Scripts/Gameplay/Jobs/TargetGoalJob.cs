@@ -20,37 +20,41 @@ public struct TargetGoalJob : IJobParallelFor
 
 	[WriteOnly]
 	public NativeList<DestroyParams>.ParallelWriter outDestroyParams;
-	
+
 	[WriteOnly]
 	[NativeDisableContainerSafetyRestriction]
-	public NativeArray<bool> outOctreeIsRebuild;
+	public NativeReference<bool> outOctreeIsRebuild;
 
 	public void Execute(int index)
 	{
 		Unit unit = units[index];
+
+		if (unit.isDestroyed)
+		{
+			return;
+		}
+
 		Target target = targets[index];
 
 		float len = target.boundsSize + unit.boundsSize;
 		bool isIntersect = math.lengthsq(target.outPosition - unit.position) <= (len * len);
 
-		if (target.targetType == TargetType.None)
+		if (target.targetType == TargetType.Idle)
 		{
 			if (isIntersect)
 			{
-				target.targetIndex = -1;
-				target.targetUniqueIndex = -1;
-				target.targetType = TargetType.None;
 				target.isDirty = true;
 				targets[index] = target;
 
 				if (unit.unitType != UnitType.Interest)
 				{
-					outOctreeIsRebuild[0] = true;
+					outOctreeIsRebuild.Value = true;
 				}
 			}
 		}
 		else if (target.targetType == TargetType.Pursuable)
 		{
+
 			if (target.targetIndex > -1)
 			{
 				if (unit.isMove == isIntersect)
@@ -77,14 +81,11 @@ public struct TargetGoalJob : IJobParallelFor
 								outSpawnParams.AddNoResize(new SpawnParams
 								{
 									unitType = UnitType.Agent,
-									position = unit.position,
-									direction = unit.direction
+									position = targetUnit.position,
+									direction = targetUnit.direction
 								});
 							}
 						}
-
-						target.isDirty = true;
-						targets[index] = target;
 					}
 
 					units[target.targetIndex] = targetUnit;
@@ -108,9 +109,6 @@ public struct TargetGoalJob : IJobParallelFor
 						targetUnit.isDestroyed = true;
 						units[target.targetIndex] = targetUnit;
 					}
-
-					target.isDirty = true;
-					targets[index] = target;
 				}
 			}
 		}

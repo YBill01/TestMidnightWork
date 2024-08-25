@@ -7,7 +7,6 @@ using Unity.Jobs;
 public struct OctreeNearestTargetJob : IJob
 {
 	public NativeArray<Unit> units;
-
 	public NativeArray<Target> targets;
 
 	public NativeOctree<Unit> octree;
@@ -17,17 +16,21 @@ public struct OctreeNearestTargetJob : IJob
 		for (int i = 0; i < units.Length; i++)
 		{
 			Unit unit = units[i];
+
+			if (unit.isDestroyed)
+			{
+				continue;
+			}
+
 			Target target = targets[i];
 
-			if (target.targetIndex < 0 && target.isDirty)
+			if (target.isDirty && target.targetType == TargetType.Idle)
 			{
 				if (unit.unitType != UnitType.Interest)
 				{
 					Unit nearestUnit;
 					if (unit.unitType == UnitType.Agent)
 					{
-						target.targetIndex = 0;
-
 						OctreeUnitNearestAgentVisitor visitorAgent = new OctreeUnitNearestAgentVisitor();
 						octree.Nearest(unit.position, 8.0f, ref visitorAgent, default(OctreeUnitNearestDistanceSquaredProvider));
 

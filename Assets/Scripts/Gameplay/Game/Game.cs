@@ -1,7 +1,7 @@
 using Cysharp.Threading.Tasks;
 using NativeTrees;
 using System;
-//using System.Diagnostics;
+using System.Diagnostics;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Jobs.LowLevel.Unsafe;
@@ -24,7 +24,7 @@ public class Game : IDisposable
 	private GameStateMachine _gameFSM;
 
 	private NativeOctree<Unit> _octree;
-	private NativeArray<bool> _octreeIsRebuild;
+	private NativeReference<bool> _octreeIsRebuild;
 
 	private NativeArray<RandomMath> _randomGenerators;
 
@@ -32,7 +32,7 @@ public class Game : IDisposable
 	private NativeList<Target> _targetsList;
 	private TransformAccessArray _transformAccessArray;
 	private NativeArray<int> _numUnits;
-	private NativeArray<int> _uniqueIndex;
+	private NativeReference<int> _uniqueIndex;
 
 	public int NumAgents => _numUnits[(int)UnitType.Agent];
 	public int NumInterests => _numUnits[(int)UnitType.Interest];
@@ -52,7 +52,7 @@ public class Game : IDisposable
 	public delegate void SpawnUnitsQuery(UnitType unitType, int count, NativeArray<SpawnParams> spawnArray);
 	public SpawnUnitsQuery spawnUnitsQuery;
 
-	public delegate void UpdateOctree(NativeArray<Unit> units, NativeArray<Target> targets, NativeOctree<Unit> octree, NativeArray<bool> octreeIsRebuild);
+	public delegate void UpdateOctree(NativeArray<Unit> units, NativeArray<Target> targets, NativeOctree<Unit> octree, NativeReference<bool> octreeIsRebuild);
 	public UpdateOctree updateOctree;
 
 	public delegate TargetJob UpdateTargets(NativeArray<Unit> units, NativeArray<Target> targets, NativeArray<RandomMath> randomGenerators);
@@ -63,6 +63,8 @@ public class Game : IDisposable
 
 	private NativeList<DestroyParams> _destroyParamsList;
 	private bool _isDestroyUnits;
+
+	private NativeQueue<int> _freeIndices;
 
 	private bool _infoIsDirty;
 
@@ -91,7 +93,7 @@ public class Game : IDisposable
 		_gameFSM.Init();
 
 		_octree = new NativeOctree<Unit>(_config.octreeBounds, Allocator.Persistent);
-		_octreeIsRebuild = new NativeArray<bool>(1, Allocator.Persistent);
+		_octreeIsRebuild = new NativeReference<bool>(false, Allocator.Persistent);
 
 		_randomGenerators = new NativeArray<RandomMath>(JobsUtility.MaxJobThreadCount, Allocator.Persistent);
 		for (int i = 0; i < _randomGenerators.Length; i++)
@@ -106,7 +108,7 @@ public class Game : IDisposable
 		Array unitTypes = Enum.GetValues(typeof(UnitType));
 
 		_numUnits = new NativeArray<int>(unitTypes.Length, Allocator.Persistent);
-		_uniqueIndex = new NativeArray<int>(1, Allocator.Persistent);
+		_uniqueIndex = new NativeReference<int>(0, Allocator.Persistent);
 
 		_velocities = new NativeArray<float>(unitTypes.Length, Allocator.Persistent);
 		SetVelocity(UnitType.Agent, _config.speedAgents);
@@ -122,6 +124,8 @@ public class Game : IDisposable
 		_unitBoundsSizes[(int)UnitType.Agent] = _factory.Get(UnitType.Agent).UnitData.boundsSize;
 		_unitBoundsSizes[(int)UnitType.Predator] = _factory.Get(UnitType.Predator).UnitData.boundsSize;
 		_unitBoundsSizes[(int)UnitType.Interest] = _factory.Get(UnitType.Interest).UnitData.boundsSize;
+
+		_freeIndices = new NativeQueue<int>(Allocator.Persistent);
 
 		StartGame().Forget();
 	}
@@ -183,8 +187,8 @@ public class Game : IDisposable
 		};
 		JobHandle moveHandle = moveJob.Schedule(_transformAccessArray, targetHandle);
 
-		NativeList<SpawnParams> spawnParams = new NativeList<SpawnParams>(1024, Allocator.TempJob);
-		NativeList<DestroyParams> destroyParams = new NativeList<DestroyParams>(unitsCount, Allocator.TempJob);
+		NativeList<SpawnParams> spawnParams = new NativeList<SpawnParams>(256, Allocator.TempJob);
+		NativeList<DestroyParams> destroyParams = new NativeList<DestroyParams>(256, Allocator.TempJob);
 		
 		TargetGoalJob targetGoalJob = new TargetGoalJob()
 		{
@@ -193,10 +197,12 @@ public class Game : IDisposable
 			outSpawnParams = spawnParams.AsParallelWriter(),
 			inSpawnCountAgents = SpawnCountAgents,
 			outDestroyParams = destroyParams.AsParallelWriter(),
-			outOctreeIsRebuild = _octreeIsRebuild
+			outOctreeIsRebuild = _octreeIsRebuild,
 		};
 		JobHandle targetGoalHandle = targetGoalJob.Schedule(unitsCount, _JOB_PARALLEL_COUNT, moveHandle);
 		targetGoalHandle.Complete();
+
+		updateOctree(units, targets, _octree, _octreeIsRebuild);
 
 		if (spawnParams.Length > 0)
 		{
@@ -211,8 +217,6 @@ public class Game : IDisposable
 		destroyParams.Dispose();
 		
 		DestroyUnits();
-
-		updateOctree(units, targets, _octree, _octreeIsRebuild);
 
 		UpdateInfo();
 	}
@@ -275,11 +279,12 @@ public class Game : IDisposable
 	{
 		if (_isSpawnUnits)
 		{
-			//var sw = Stopwatch.StartNew();
+			Stopwatch sw = Stopwatch.StartNew();
 
 			SpawnJob spawnJob = new SpawnJob()
 			{
 				inSpawnParams = _spawnParamsList,
+				freeIndices = _freeIndices,
 				inIdleRadiuses = _idleRadiuses,
 				inUnitBoundsSizes = _unitBoundsSizes,
 				numUnits = _numUnits,
@@ -291,8 +296,8 @@ public class Game : IDisposable
 			};
 			spawnJob.Execute();
 
-			//sw.Stop();
-			//UnityEngine.Debug.Log($"spawn: {sw.Elapsed.TotalMilliseconds}");
+			sw.Stop();
+			UnityEngine.Debug.Log($"spawn: count:{_spawnParamsList.Length} - {sw.Elapsed.TotalMilliseconds}ms");
 
 			_spawnParamsList.Dispose();
 
@@ -304,21 +309,21 @@ public class Game : IDisposable
 	{
 		if (_isDestroyUnits)
 		{
-			//var sw = Stopwatch.StartNew();
+			Stopwatch sw = Stopwatch.StartNew();
 
 			DestroyJob destroyJob = new DestroyJob()
 			{
 				inDestroyParams = _destroyParamsList,
+				freeIndices = _freeIndices,
 				numUnits = _numUnits,
 				inFactory = _factory,
 				outUnits = _unitsList,
-				outTargets = _targetsList,
 				outTransformAccessArray = _transformAccessArray
 			};
 			destroyJob.Execute();
 
-			//sw.Stop();
-			//UnityEngine.Debug.Log($"destroy: {sw.Elapsed.TotalMilliseconds}");
+			sw.Stop();
+			UnityEngine.Debug.Log($"destroy: count:{_destroyParamsList.Length} - {sw.Elapsed.TotalMilliseconds}ms");
 
 			_destroyParamsList.Dispose();
 
@@ -361,8 +366,8 @@ public class Game : IDisposable
 		_velocities.Dispose();
 		_idleRadiuses.Dispose();
 		_unitBoundsSizes.Dispose();
+		_freeIndices.Dispose();
 
-		
 		UnityEngine.Debug.Log("Game::disposed");
 	}
 }

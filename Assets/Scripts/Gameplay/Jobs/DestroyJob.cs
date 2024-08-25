@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
@@ -8,25 +7,22 @@ using UnityEngine.Jobs;
 [BurstCompile(CompileSynchronously = true)]
 public class DestroyJob : IJob
 {
+	[ReadOnly]
 	public NativeList<DestroyParams> inDestroyParams;
+	[WriteOnly]
+	public NativeQueue<int> freeIndices;
 
 	public NativeArray<int> numUnits;
 
 	[ReadOnly]
 	public Factory inFactory;
 
-	[WriteOnly]
 	public NativeList<Unit> outUnits;
-	[WriteOnly]
-	public NativeList<Target> outTargets;
-	[WriteOnly]
+	[ReadOnly]
 	public TransformAccessArray outTransformAccessArray;
 	
 	public void Execute()
 	{
-		SortJob<DestroyParams, DestroyParamsComparer> destroyParamsSortJobHandle = inDestroyParams.SortJob(new DestroyParamsComparer());
-		destroyParamsSortJobHandle.Schedule().Complete();
-
 		for (int i = 0; i < inDestroyParams.Length; i++)
 		{
 			DestroyParams destroyParams = inDestroyParams[i];
@@ -34,22 +30,17 @@ public class DestroyJob : IJob
 			int index = destroyParams.index;
 
 			Unit unit = outUnits[index];
+			unit.isDestroyed = true;
+			
 			GameObject gameObject = outTransformAccessArray[index].gameObject;
 
 			inFactory.Get(unit.unitType).Dispose(gameObject);
 
-			numUnits[(int)unit.unitType]--;
-			outUnits.RemoveAtSwapBack(index);
-			outTargets.RemoveAtSwapBack(index);
-			outTransformAccessArray.RemoveAtSwapBack(index);
-		}
-	}
+			numUnits[(int)unit.unitType] -= 1;
 
-	struct DestroyParamsComparer : IComparer<DestroyParams>
-	{
-		public int Compare(DestroyParams x, DestroyParams y)
-		{
-			return y.index.CompareTo(x.index);
+			outUnits[index] = unit;
+
+			freeIndices.Enqueue(index);
 		}
 	}
 }

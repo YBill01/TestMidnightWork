@@ -11,7 +11,7 @@ public struct TargetJob : IJobParallelFor
 {
 	[NativeDisableContainerSafetyRestriction]
 	public NativeArray<Unit> units;
-
+	[NativeDisableContainerSafetyRestriction]
 	public NativeArray<Target> targets;
 
 	[NativeDisableContainerSafetyRestriction]
@@ -27,11 +27,15 @@ public struct TargetJob : IJobParallelFor
 	[ReadOnly]
 	public Bounds asylumAreaBounds;
 
-	private int _unitsCount => units.Length;
-
 	public void Execute(int index)
 	{
 		Unit unit = units[index];
+
+		if (unit.isDestroyed)
+		{
+			return;
+		}
+
 		Target target = targets[index];
 		RandomMath random = randomGenerators[_threadId];
 
@@ -55,7 +59,7 @@ public struct TargetJob : IJobParallelFor
 
 			target.targetIndex = -1;
 			target.targetUniqueIndex = -1;
-			target.targetType = TargetType.None;
+			target.targetType = TargetType.Idle;
 			target.inPosition = target.outPosition;
 			target.boundsSize = 0.0f;
 			target.isDirty = false;
@@ -76,10 +80,10 @@ public struct TargetJob : IJobParallelFor
 
 			unit.isMove = true;
 			units[index] = unit;
-			
+
 			target.targetIndex = -1;
 			target.targetUniqueIndex = -1;
-			target.targetType = TargetType.None;
+			target.targetType = TargetType.Idle;
 			target.boundsSize = 0.0f;
 			target.isDirty = false;
 			targets[index] = target;
@@ -90,17 +94,13 @@ public struct TargetJob : IJobParallelFor
 		{
 			if (target.targetIndex > -1)
 			{
-				if (target.targetIndex < _unitsCount && target.targetUniqueIndex == units[target.targetIndex].uniqueIndex)
+				if (!units[target.targetIndex].isDestroyed && target.targetUniqueIndex == units[target.targetIndex].uniqueIndex)
 				{
 					target.outPosition = units[target.targetIndex].position;
 					targets[index] = target;
 				}
 				else
 				{
-					target.targetIndex = -1;
-					target.targetUniqueIndex = -1;
-					target.targetType = TargetType.None;
-					target.boundsSize = 0.0f;
 					target.isDirty = true;
 					targets[index] = target;
 				}

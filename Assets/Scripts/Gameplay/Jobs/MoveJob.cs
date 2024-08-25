@@ -20,6 +20,12 @@ public struct MoveJob : IJobParallelForTransform
 	public void Execute(int index, TransformAccess transform)
 	{
 		Unit unit = units[index];
+
+		if (unit.isDestroyed)
+		{
+			return;
+		}
+
 		Target target = targets[index];
 
 		float3 direction = target.outPosition - unit.position;

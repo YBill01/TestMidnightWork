@@ -54,7 +54,7 @@ public class GameNightState : State
 		}
 	}
 
-	public void UpdateOctree(NativeArray<Unit> units, NativeArray<Target> targets, NativeOctree<Unit> octree, NativeArray<bool> octreeIsRebuild)
+	public void UpdateOctree(NativeArray<Unit> units, NativeArray<Target> targets, NativeOctree<Unit> octree, NativeReference<bool> octreeIsRebuild)
 	{
 		// some realisation...
 	}

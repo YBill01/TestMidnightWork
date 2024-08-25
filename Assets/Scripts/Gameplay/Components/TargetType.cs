@@ -1,6 +1,6 @@
 public enum TargetType : byte
 {
-	None,
+	Idle,
 	Pursuable,
 	Destroyable
 }

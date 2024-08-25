@@ -9,6 +9,8 @@ public class SpawnJob : IJob
 {
 	[ReadOnly]
 	public NativeList<SpawnParams> inSpawnParams;
+	[ReadOnly]
+	public NativeQueue<int> freeIndices;
 
 	[ReadOnly]
 	public NativeArray<float> inIdleRadiuses;
@@ -16,7 +18,7 @@ public class SpawnJob : IJob
 	public NativeArray<float> inUnitBoundsSizes;
 	
 	public NativeArray<int> numUnits;
-	public NativeArray<int> uniqueIndex;
+	public NativeReference<int> uniqueIndex;
 
 	[ReadOnly]
 	public Factory inFactory;
@@ -36,7 +38,7 @@ public class SpawnJob : IJob
 
 			Unit unit = new Unit
 			{
-				uniqueIndex = uniqueIndex[0],
+				uniqueIndex = uniqueIndex.Value,
 				unitType = spawnParams.unitType,
 				position = spawnParams.position,
 				direction = spawnParams.direction,
@@ -53,11 +55,29 @@ public class SpawnJob : IJob
 				idleRadius = inIdleRadiuses[(int)spawnParams.unitType]
 			};
 
-			numUnits[(int)spawnParams.unitType]++;
-			uniqueIndex[0]++;
-			outUnits.Add(unit);
-			outTargets.Add(target);
-			outTransformAccessArray.Add(inFactory.Get(spawnParams.unitType).Instantiate(spawnParams.position, Quaternion.LookRotation(spawnParams.direction)).transform);
+			Transform transform = inFactory.Get(spawnParams.unitType).Instantiate(spawnParams.position, Quaternion.LookRotation(spawnParams.direction)).transform;
+
+			numUnits[(int)spawnParams.unitType] += 1;
+			uniqueIndex.Value += 1;
+
+			if (!freeIndices.IsEmpty())
+			{
+				int index = freeIndices.Dequeue();
+
+				unit.index = index;
+
+				outUnits[index] = unit;
+				outTargets[index] = target;
+				outTransformAccessArray[index] = transform;
+			}
+			else
+			{
+				unit.index = outUnits.Length;
+
+				outUnits.Add(unit);
+				outTargets.Add(target);
+				outTransformAccessArray.Add(transform);
+			}
 		}
 	}
 }

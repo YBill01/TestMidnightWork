@@ -6,6 +6,7 @@ using Unity.Jobs;
 [BurstCompile(CompileSynchronously = true)]
 public struct OctreeInsertUnitsJob : IJob
 {
+	[ReadOnly]
 	public NativeArray<Unit> units;
 
 	public NativeOctree<Unit> octree;
@@ -15,10 +16,13 @@ public struct OctreeInsertUnitsJob : IJob
 		for (int i = 0; i < units.Length; i++)
 		{
 			Unit unit = units[i];
-			unit.index = i;
-			units[i] = unit;
 
-			octree.InsertPoint(units[i], units[i].position);
+			if (unit.isDestroyed)
+			{
+				continue;
+			}
+
+			octree.InsertPoint(unit, unit.position);
 		}
 	}
 }
