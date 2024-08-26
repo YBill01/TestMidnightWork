@@ -46,7 +46,7 @@ public class GameDayState : State
 
 	protected override void OnUpdate()
 	{
-		//SpawnInterests();
+		SpawnInterests();
 	}
 
 	private void SpawnInterests()
